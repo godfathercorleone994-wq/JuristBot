@@ -1,10 +1,15 @@
 import os
 import sys
 import logging
-from dotenv import load_dotenv
 
-# ✅ ADICIONAR CAMINHO para importar módulos do app
-sys.path.append(os.path.dirname(__file__))
+# ✅ CORREÇÃO CRÍTICA: Adicionar caminho absoluto
+current_dir = os.path.dirname(os.path.abspath(__file__))
+app_dir = os.path.join(current_dir, 'app')
+sys.path.insert(0, current_dir)
+sys.path.insert(0, app_dir)
+
+# Agora importar dotenv
+from dotenv import load_dotenv
 
 # Carregar configurações
 load_dotenv()
@@ -19,29 +24,46 @@ logger = logging.getLogger(__name__)
 def main():
     """Função principal"""
     try:
-        # ✅ VERIFICAR IMPORTAÇÕES
+        logger.info("🚀 Iniciando JuristBot 2.0...")
+        
+        # ✅ VERIFICAR IMPORTAÇÕES PRIMEIRO
+        logger.info("📦 Verificando importações...")
+        
         from app.core.config import Config
         from app.core.database import mongo_db
         from app.modules.ia_services import ai_service
         
+        logger.info("✅ Importações básicas OK")
+        
         # Validar configurações
         Config.validate()
+        logger.info("✅ Configurações validadas")
         
-        logger.info("✅ Todas as importações funcionaram!")
-        logger.info(f"🗄️ MongoDB: {'Conectado' if mongo_db.is_connected else 'Desconectado'}")
-        logger.info(f"🤖 IA Services: DeepSeek={ai_service.deepseek_available}")
-        
-        # Iniciar bot Telegram
-        from telegram.ext import Application
+        # Inicializar bot Telegram
+        from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler
         from app.core.registry import module_registry
         
         token = os.getenv('TELEGRAM_BOT_TOKEN')
+        if not token:
+            raise ValueError("TELEGRAM_BOT_TOKEN não configurado!")
+            
         application = Application.builder().token(token).build()
+        logger.info("✅ Bot Telegram inicializado")
         
-        # Carregar módulos
-        from app.modules import example, legal_assistant, affiliate_system, process_consultation, admin, juristcoach
+        # ✅ CARREGAR MÓDULOS
+        logger.info("🔧 Carregando módulos...")
         
-        # Registrar handlers
+        # Importar módulos (isso registra automaticamente os handlers)
+        from app.modules import example
+        from app.modules import legal_assistant
+        from app.modules import affiliate_system
+        from app.modules import process_consultation
+        from app.modules import admin
+        from app.modules import juristcoach
+        
+        logger.info("✅ Módulos importados")
+        
+        # Registrar handlers dos módulos
         for handler_type, handler_config in module_registry.get_handlers():
             if handler_type == 'command':
                 application.add_handler(CommandHandler(*handler_config))
@@ -54,7 +76,17 @@ def main():
         for conversation_handler in module_registry.get_conversation_handlers():
             application.add_handler(conversation_handler)
         
-        # Configurar webhook
+        # Configurar comandos do bot
+        commands_list = module_registry.get_commands()
+        if commands_list:
+            from telegram import BotCommand
+            bot_commands = [BotCommand(cmd, desc) for cmd, desc in commands_list]
+            application.bot.set_my_commands(bot_commands)
+        
+        logger.info(f"✅ {len(commands_list)} comandos registrados")
+        logger.info(f"✅ {len(module_registry.get_loaded_modules())} módulos carregados")
+        
+        # Configurar webhook para Render
         webhook_url = os.getenv('RENDER_WEBHOOK_URL')
         if webhook_url:
             logger.info(f"🌐 Configurando webhook: {webhook_url}")
@@ -62,14 +94,21 @@ def main():
                 listen="0.0.0.0",
                 port=int(os.getenv('PORT', 8443)),
                 url_path=token,
-                webhook_url=f"{webhook_url}/{token}"
+                webhook_url=f"{webhook_url}/{token}",
+                secret_token=os.getenv('WEBHOOK_SECRET', 'juristbot_secret')
             )
         else:
-            logger.info("🔄 Usando polling...")
-            application.run_polling()
+            logger.info("🔄 Modo polling ativado")
+            application.run_polling(
+                drop_pending_updates=True,
+                allowed_updates=['message', 'callback_query']
+            )
             
     except Exception as e:
-        logger.error(f"❌ Erro ao iniciar bot: {e}")
+        logger.error(f"❌ Erro crítico: {e}")
+        # Log detalhado para debugging
+        import traceback
+        logger.error(f"❌ Traceback: {traceback.format_exc()}")
         raise
 
 if __name__ == '__main__':
