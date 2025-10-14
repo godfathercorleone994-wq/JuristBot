@@ -6,12 +6,15 @@ services:
     region: oregon
     branch: main
     
-    # Configurações de build
+    # Build simplificado - SEM build.sh complexo
     buildCommand: |
+      echo "🔧 Instalando dependências..."
       pip install -r requirements.txt
+      echo "📁 Criando diretórios..."
       mkdir -p app/data app/logs
+      echo "✅ Build completo!"
     
-    # ✅ CORREÇÃO: Comando direto sem cd
+    # ✅ CORREÇÃO DEFINITIVA: Comando DIRETO
     startCommand: python main.py
     
     # Variáveis de ambiente
@@ -38,10 +41,5 @@ services:
         value: "3.11.0"
       - key: PORT
         value: "8443"
-      - key: RENDER_WEBHOOK_URL
-        fromService:
-          type: web
-          name: juristbot
-          property: url
 
 version: "1"
