@@ -38,6 +38,9 @@ class JuristBot:
             # Importar módulos (serão carregados automaticamente via registry)
             from app.core.registry import module_registry
             
+            # Importar todos os módulos
+            from app.modules import example, legal_assistant, affiliate_system, process_consultation, admin
+            
             # Registrar handlers dos módulos
             for handler_type, handler_config in module_registry.get_handlers():
                 if handler_type == 'command':
@@ -54,8 +57,9 @@ class JuristBot:
                 bot_commands = [BotCommand(cmd, desc) for cmd, desc in commands_list]
                 self.application.bot.set_my_commands(bot_commands)
             
-            logger.info(f"✅ Módulos carregados: {len(module_registry.get_handlers())} handlers")
-            logger.info(f"✅ Comandos registrados: {len(commands_list)} comandos")
+            logger.info(f"✅ Módulos carregados: {len(module_registry.get_loaded_modules())}")
+            logger.info(f"✅ Handlers registrados: {len(module_registry.get_handlers())}")
+            logger.info(f"✅ Comandos configurados: {len(commands_list)}")
             
         except Exception as e:
             logger.error(f"❌ Erro ao carregar módulos: {e}")
@@ -137,8 +141,9 @@ class JuristBot:
             "/start - Iniciar conversa\n"
             "/ajuda - Ver todos os comandos\n"
             "/direito <pergunta> - Consulta jurídica\n"
-            "/analisar - Analisar documento\n"
-            "/consultar - Consultar processo\n\n"
+            "/consultarcpf <CPF> - Consultar processos por CPF\n"
+            "/consultarprocesso <numero> - Consultar processo\n"
+            "/afiliado - Tornar-se afiliado\n\n"
             "Escolha um comando para continuar!"
         )
         
