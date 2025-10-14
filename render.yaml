@@ -4,7 +4,7 @@ services:
     name: juristbot
     env: python
     plan: free
-    region: oregon  # ou virginia, frankfurt, etc.
+    region: oregon
     branch: main
     
     # Configurações de build
@@ -13,9 +13,9 @@ services:
       ./build.sh
     
     # Comando de inicialização
-    startCommand: cd app && python main.py
+    startCommand: python app/main.py
     
-    # Variáveis de ambiente (serão configuradas no painel do Render)
+    # Variáveis de ambiente
     envVars:
       - key: TELEGRAM_BOT_TOKEN
         sync: false
@@ -37,37 +37,11 @@ services:
         value: "JuristBot 2.0"
       - key: PYTHON_VERSION
         value: "3.11.0"
+      - key: PORT
+        value: "8443"
 
-    # Health check path (opcional)
+    # Health check path
     healthCheckPath: /health
-
-  # Database MongoDB (serviço separado)
-  - type: pserv
-    name: juristbot-mongodb
-    plan: free
-    region: oregon
-    disk:
-      name: data
-      mountPath: /data/db
-      sizeGB: 1
-    env: docker
-    docker:
-      image: mongo:6.0
-    envVars:
-      - key: MONGO_INITDB_ROOT_USERNAME
-        sync: false
-      - key: MONGO_INITDB_ROOT_PASSWORD
-        sync: false
 
 # Configurações globais
 version: "1"
-
-# Scripts de deploy opcionais
-preDeployCommand: echo "Iniciando deploy do JuristBot..."
-
-# Configurações de escalabilidade (para planos pagos)
-# autoScaling:
-#   minInstances: 1
-#   maxInstances: 3
-#   targetMemoryPercent: 80
-#   targetCPUPercent: 80
