@@ -38,8 +38,9 @@ class JuristBot:
             # Importar módulos (serão carregados automaticamente via registry)
             from app.core.registry import module_registry
             
-            # Importar todos os módulos
-            from app.modules import example, legal_assistant, affiliate_system, process_consultation, admin
+            # ✅ Importar todos os módulos (carregamento automático)
+            # O registro é feito pelos próprios módulos ao serem importados
+            from app.modules import example, legal_assistant, affiliate_system, process_consultation, admin, juristcoach
             
             # Registrar handlers dos módulos
             for handler_type, handler_config in module_registry.get_handlers():
@@ -50,6 +51,10 @@ class JuristBot:
                 elif handler_type == 'callback':
                     self.application.add_handler(CallbackQueryHandler(*handler_config))
             
+            # ✅ NOVO: Registrar Conversation Handlers
+            for conversation_handler in module_registry.get_conversation_handlers():
+                self.application.add_handler(conversation_handler)
+            
             # Registrar comandos do bot
             commands_list = module_registry.get_commands()
             if commands_list:
@@ -59,6 +64,7 @@ class JuristBot:
             
             logger.info(f"✅ Módulos carregados: {len(module_registry.get_loaded_modules())}")
             logger.info(f"✅ Handlers registrados: {len(module_registry.get_handlers())}")
+            logger.info(f"✅ Conversation Handlers: {len(module_registry.get_conversation_handlers())}")
             logger.info(f"✅ Comandos configurados: {len(commands_list)}")
             
         except Exception as e:
@@ -143,7 +149,8 @@ class JuristBot:
             "/direito <pergunta> - Consulta jurídica\n"
             "/consultarcpf <CPF> - Consultar processos por CPF\n"
             "/consultarprocesso <numero> - Consultar processo\n"
-            "/afiliado - Tornar-se afiliado\n\n"
+            "/afiliado - Tornar-se afiliado\n"
+            "/juristcoach - Assistente de carreira jurídica\n\n"
             "Escolha um comando para continuar!"
         )
         
