@@ -6,7 +6,7 @@ services:
     region: oregon
     branch: main
     
-    # Build simplificado - SEM build.sh complexo
+    # Build simplificado
     buildCommand: |
       echo "🔧 Instalando dependências..."
       pip install -r requirements.txt
@@ -14,7 +14,6 @@ services:
       mkdir -p app/data app/logs
       echo "✅ Build completo!"
     
-    # ✅ CORREÇÃO DEFINITIVA: Comando DIRETO
     startCommand: python main.py
     
     # Variáveis de ambiente
