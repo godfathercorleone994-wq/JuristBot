@@ -14,7 +14,9 @@ services:
       mkdir -p app/data app/logs
       echo "✅ Build completo!"
     
-    startCommand: python main.py
+
+startCommand: python -m app.main
+
     
     # Variáveis de ambiente
     envVars:
@@ -39,6 +41,6 @@ services:
       - key: PYTHON_VERSION
         value: "3.11.0"
       - key: PORT
-        value: "8443"
+        value: "10000"
 
 version: "1"
