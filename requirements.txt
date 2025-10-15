@@ -3,3 +3,5 @@ python-dotenv==1.0.0
 requests==2.28.2
 pymongo==4.3.3
 google-generativeai
+openai
+deepseek
