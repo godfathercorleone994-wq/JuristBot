@@ -3,7 +3,8 @@ import asyncio
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ContextTypes, CallbackQueryHandler, ConversationHandler, MessageHandler, filters
+# CORREÇÃO 1: Adicionado CommandHandler aqui
+from telegram.ext import CommandHandler, ContextTypes, CallbackQueryHandler, ConversationHandler, MessageHandler, filters
 from app.core.registry import module_registry
 from app.core.database import mongo_db
 from app.core.config import Config
@@ -39,7 +40,8 @@ class JuristCoach:
             'ingles': '🌎 Inglês Jurídico'
         }
 
-    async def start_juristcoach(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # CORREÇÃO 2: Removido 'async' e 'await' desta função
+    def start_juristcoach(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Iniciar o JuristCoach - Assistente de Carreira Jurídica"""
         user = update.effective_user
         
@@ -66,7 +68,7 @@ class JuristCoach:
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
-        await update.message.reply_text(welcome_text, reply_markup=reply_markup, parse_mode='Markdown')
+        update.message.reply_text(welcome_text, reply_markup=reply_markup, parse_mode='Markdown')
         
         # Registrar uso do JuristCoach
         mongo_db.log_query(user.id, 'juristcoach_start', 'Iniciou JuristCoach', 'Análise de carreira iniciada')
@@ -620,12 +622,22 @@ class JuristCoach:
         await query.message.reply_text("🎯 **Pronto para colocar em prática?**", reply_markup=reply_markup)
         return RECEIVING_ADVICE
 
+    # CORREÇÃO 3: Removido 'await' da chamada para 'start_juristcoach'
     async def back_to_main(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Voltar ao menu principal"""
         query = update.callback_query
-        await query.answer()
-        
-        return await self.start_juristcoach(update, context)
+        # O 'await' na linha abaixo não é necessário pois a função chamada não é mais 'async'
+        # e a query já foi respondida em 'back_to_menu' que é o passo anterior
+        if query:
+            await query.answer()
+
+        # A função start_juristcoach não é mais async, então chamamos diretamente
+        # e como a função de update do telegram não está sendo chamada aqui, usamos o objeto update que já temos
+        if update.callback_query:
+             update.callback_query.message.reply_text("Retornando ao menu principal...")
+             return self.start_juristcoach(update.callback_query, context)
+        else:
+             return self.start_juristcoach(update, context)
 
     async def back_to_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Voltar ao menu do JuristCoach"""
@@ -657,9 +669,10 @@ class JuristCoach:
         await query.edit_message_text(welcome_text, reply_markup=reply_markup, parse_mode='Markdown')
         return CHOOSING
 
-    async def cancel(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # CORREÇÃO 4: Removido 'async' e 'await' desta função
+    def cancel(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Cancelar conversação"""
-        await update.message.reply_text(
+        update.message.reply_text(
             "👋 Até logo! Lembre-se: *sua carreira jurídica é uma jornada* 🚀\n\n"
             "Volte ao JuristCoach quando quiser continuar sua evolução!",
             parse_mode='Markdown'
