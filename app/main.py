@@ -126,7 +126,7 @@ def main():
             logger.info(f"🌐 Configurando webhook: {webhook_url}")
             application.run_webhook(
                 listen="0.0.0.0",
-                port=int(os.getenv('PORT', 8443)),
+                port=int(os.getenv('PORT', 10000)),
                 url_path=token,
                 webhook_url=f"{webhook_url}/{token}",
                 secret_token=os.getenv('WEBHOOK_SECRET', 'juristbot_secret')
