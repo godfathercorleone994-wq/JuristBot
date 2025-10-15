@@ -3,7 +3,6 @@ import asyncio
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-# CORREÇÃO 1: Adicionado CommandHandler aqui
 from telegram.ext import CommandHandler, ContextTypes, CallbackQueryHandler, ConversationHandler, MessageHandler, filters
 from app.core.registry import module_registry
 from app.core.database import mongo_db
@@ -40,7 +39,6 @@ class JuristCoach:
             'ingles': '🌎 Inglês Jurídico'
         }
 
-    # CORREÇÃO 2: Removido 'async' e 'await' desta função
     def start_juristcoach(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Iniciar o JuristCoach - Assistente de Carreira Jurídica"""
         user = update.effective_user
@@ -68,17 +66,18 @@ class JuristCoach:
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
-        update.message.reply_text(welcome_text, reply_markup=reply_markup, parse_mode='Markdown')
+        # 'update' pode ser de uma mensagem ou de um callback de botão
+        message = update.message if update.message else update.callback_query.message
+        message.reply_text(welcome_text, reply_markup=reply_markup, parse_mode='Markdown')
         
-        # Registrar uso do JuristCoach
         mongo_db.log_query(user.id, 'juristcoach_start', 'Iniciou JuristCoach', 'Análise de carreira iniciada')
         
         return CHOOSING
 
-    async def career_analysis(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    def career_analysis(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Análise completa de perfil profissional"""
         query = update.callback_query
-        await query.answer()
+        query.answer()
         
         analysis_text = (
             "🎯 **ANÁLISE DE PERFIL PROFISSIONAL**\n\n"
@@ -95,554 +94,285 @@ class JuristCoach:
         keyboard = [[InlineKeyboardButton("🔙 Voltar", callback_data="coach_back")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
-        await query.edit_message_text(analysis_text, reply_markup=reply_markup, parse_mode='Markdown')
+        query.edit_message_text(analysis_text, reply_markup=reply_markup, parse_mode='Markdown')
         return ANALYZING_CAREER
 
-    async def analyze_profile(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    def analyze_profile(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Processar análise de perfil com IA"""
         user_profile = update.message.text
         user_id = update.effective_user.id
         
-        await update.message.reply_text("🔮 **Analisando seu perfil com IA...**")
+        update.message.reply_text("🔮 **Analisando seu perfil com IA...**")
         
-        # Prompt para análise com IA
         analysis_prompt = f"""
         ANALISE ESTE PERFIL JURÍDICO E FORNEÇA:
-
-        PERFIL DO USUÁRIO:
-        {user_profile}
-
+        PERFIL DO USUÁRIO: {user_profile}
         FORNEÇA UMA ANÁLISE ESTRUTURADA COM:
-
-        1. **ANÁLISE SWOT PERSONALIZADA**
-           - Pontos Fortes (com base no perfil)
-           - Pontos Fracos (áreas de melhoria)  
-           - Oportunidades (no mercado jurídico)
-           - Ameaças (desafios previstos)
-
-        2. **CARREIRAS RECOMENDADAS**
-           - Top 3 carreiras mais adequadas
-           - Justificativa para cada recomendação
-           - Potencial de crescimento
-
-        3. **PLANO DE DESENVOLVIMENTO**
-           - Habilidades prioritárias para desenvolver
-           - Cursos/certificações recomendados
-           - Experiências práticas sugeridas
-
-        4. **PREVISÃO DE MERCADO**
-           - Tendências para as áreas recomendadas
-           - Salários médios esperados
-           - Competitividade do mercado
-
+        1. ANÁLISE SWOT PERSONALIZADA (Pontos Fortes, Fracos, Oportunidades, Ameaças)
+        2. CARREIRAS RECOMENDADAS (Top 3 com justificativa)
+        3. PLANO DE DESENVOLVIMENTO (Habilidades, cursos, experiências)
+        4. PREVISÃO DE MERCADO (Tendências, salários)
         Formate a resposta de forma clara e motivadora!
         """
 
-        # Obter análise da IA
-        analysis = await ai_service.get_legal_advice(analysis_prompt, "Você é um coach de carreira jurídica especializado.")
+        analysis = asyncio.run(ai_service.get_legal_advice(analysis_prompt, "Você é um coach de carreira jurídica especializado."))
         
-        # Salvar análise no banco de dados
-        coach_data = {
-            'user_id': user_id,
-            'profile_analysis': user_profile,
-            'ia_analysis': analysis,
-            'analysis_date': datetime.utcnow(),
-            'coach_stage': 'profile_analyzed'
-        }
-        
+        coach_data = {'user_id': user_id, 'profile_analysis': user_profile, 'ia_analysis': analysis, 'analysis_date': datetime.utcnow(), 'coach_stage': 'profile_analyzed'}
         coach_collection = mongo_db.get_collection('juristcoach')
-        coach_collection.update_one(
-            {'user_id': user_id},
-            {'$set': coach_data},
-            upsert=True
-        )
+        coach_collection.update_one({'user_id': user_id}, {'$set': coach_data}, upsert=True)
         
-        # Enviar análise completa
-        response_text = (
-            "🎉 **ANÁLISE COMPLETA DO SEU PERFIL!**\n\n"
-            f"{analysis}\n\n"
-            "💫 *Use essas insights para impulsionar sua carreira!*"
-        )
+        response_text = f"🎉 **ANÁLISE COMPLETA DO SEU PERFIL!**\n\n{analysis}\n\n💫 *Use essas insights para impulsionar sua carreira!*"
         
-        # Dividir mensagem se for muito longa
         if len(response_text) > 4096:
             parts = [response_text[i:i+4096] for i in range(0, len(response_text), 4096)]
             for part in parts:
-                await update.message.reply_text(part, parse_mode='Markdown')
+                update.message.reply_text(part, parse_mode='Markdown')
         else:
-            await update.message.reply_text(response_text, parse_mode='Markdown')
+            update.message.reply_text(response_text, parse_mode='Markdown')
         
-        # Registrar conversão para afiliados
-        await affiliate_system.record_conversion(user_id, 'career_coaching', 50.0)
+        asyncio.run(affiliate_system.record_conversion(user_id, 'career_coaching', 50.0))
         
-        keyboard = [
-            [InlineKeyboardButton("🚀 Criar Plano de Ação", callback_data="coach_action_plan")],
-            [InlineKeyboardButton("📚 Ver Roteiro de Estudos", callback_data="coach_studyplan")],
-            [InlineKeyboardButton("🔙 Menu Principal", callback_data="coach_back_main")]
-        ]
+        keyboard = [[InlineKeyboardButton("🚀 Criar Plano de Ação", callback_data="coach_action_plan")], [InlineKeyboardButton("📚 Ver Roteiro de Estudos", callback_data="coach_studyplan")], [InlineKeyboardButton("🔙 Menu Principal", callback_data="coach_back_main")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
-        await update.message.reply_text("🎯 **Qual o próximo passo?**", reply_markup=reply_markup)
+        update.message.reply_text("🎯 **Qual o próximo passo?**", reply_markup=reply_markup)
         return RECEIVING_ADVICE
 
-    async def create_study_plan(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    def create_study_plan(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Criar roteiro de estudos personalizado"""
         query = update.callback_query
-        await query.answer()
-        
+        query.answer()
         user_id = query.from_user.id
         
-        # Buscar análise do usuário
         coach_collection = mongo_db.get_collection('juristcoach')
         user_data = coach_collection.find_one({'user_id': user_id})
         
         if not user_data or 'ia_analysis' not in user_data:
-            await query.edit_message_text(
-                "❌ Primeiro preciso analisar seu perfil!\n\n"
-                "Use a opção 'Análise de Perfil' para começar."
-            )
+            query.edit_message_text("❌ Primeiro preciso analisar seu perfil!\n\nUse a opção 'Análise de Perfil' para começar.")
             return CHOOSING
         
-        await query.edit_message_text("📚 **Criando seu roteiro de estudos personalizado...**")
+        query.edit_message_text("📚 **Criando seu roteiro de estudos personalizado...**")
         
         study_prompt = f"""
-        BASEADO NA ANÁLISE ANTERIOR, CRIE UM ROTEIRO DE ESTUDOS:
-
-        ANÁLISE DO USUÁRIO:
-        {user_data.get('ia_analysis', '')}
-
-        CRIE UM PLANO DE ESTUDOS DETALHADO COM:
-
-        1. **CRONOGRAMA SEMANAL**
-           - Distribuição de horas por disciplina
-           - Períodos de revisão
-           - Pausas estratégicas
-
-        2. **MATERIAIS RECOMENDADOS**
-           - Livros essenciais por área
-           - Cursos online recomendados
-           - Sites e blogs jurídicos
-           - Canais do YouTube
-
-        3. **METODOLOGIA DE ESTUDO**
-           - Técnicas de memorização
-           - Mapas mentais sugeridos
-           - Exercícios práticos
-           - Simulados periódicos
-
-        4. **ACOMPANHAMENTO DE PROGRESSO**
-           - Métricas de evolução
-           - Pontos de verificação
-           - Ajustes necessários
-
+        BASEADO NA ANÁLISE ANTERIOR, CRIE UM ROTEIRO DE ESTUDOS DETALHADO COM:
+        ANÁLISE DO USUÁRIO: {user_data.get('ia_analysis', '')}
+        1. CRONOGRAMA SEMANAL (distribuição, revisões, pausas)
+        2. MATERIAIS RECOMENDADOS (livros, cursos, sites)
+        3. METODOLOGIA DE ESTUDO (técnicas, mapas mentais, exercícios)
+        4. ACOMPANHAMENTO DE PROGRESSO (métricas, verificações)
         Formate como um plano executável de 3-6 meses!
         """
 
-        study_plan = await ai_service.get_legal_advice(study_prompt, "Você é um especialista em métodos de estudo jurídico.")
+        study_plan = asyncio.run(ai_service.get_legal_advice(study_prompt, "Você é um especialista em métodos de estudo jurídico."))
         
-        # Atualizar com plano de estudos
-        coach_collection.update_one(
-            {'user_id': user_id},
-            {'$set': {
-                'study_plan': study_plan,
-                'study_plan_date': datetime.utcnow()
-            }}
-        )
+        coach_collection.update_one({'user_id': user_id}, {'$set': {'study_plan': study_plan, 'study_plan_date': datetime.utcnow()}})
         
-        response_text = (
-            "📚 **SEU ROTEIRO DE ESTUDOS PERSONALIZADO!**\n\n"
-            f"{study_plan}\n\n"
-            "🎯 *Siga este plano para maximizar seus resultados!*"
-        )
+        response_text = f"📚 **SEU ROTEIRO DE ESTUDOS PERSONALIZADO!**\n\n{study_plan}\n\n🎯 *Siga este plano para maximizar seus resultados!*"
         
-        # Dividir mensagem se necessário
         if len(response_text) > 4096:
             parts = [response_text[i:i+4096] for i in range(0, len(response_text), 4096)]
             for part in parts:
-                await query.message.reply_text(part, parse_mode='Markdown')
+                query.message.reply_text(part, parse_mode='Markdown')
         else:
-            await query.message.reply_text(response_text, parse_mode='Markdown')
+            query.message.reply_text(response_text, parse_mode='Markdown')
         
-        keyboard = [
-            [InlineKeyboardButton("💼 Simulador de Entrevista", callback_data="coach_interview")],
-            [InlineKeyboardButton("📈 Acompanhar Progresso", callback_data="coach_progress")],
-            [InlineKeyboardButton("🔙 Menu Principal", callback_data="coach_back_main")]
-        ]
+        keyboard = [[InlineKeyboardButton("💼 Simulador de Entrevista", callback_data="coach_interview")], [InlineKeyboardButton("📈 Acompanhar Progresso", callback_data="coach_progress")], [InlineKeyboardButton("🔙 Menu Principal", callback_data="coach_back_main")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
-        await query.message.reply_text("🎓 **Preparado para os próximos passos?**", reply_markup=reply_markup)
+        query.message.reply_text("🎓 **Preparado para os próximos passos?**", reply_markup=reply_markup)
         return RECEIVING_ADVICE
 
-    async def interview_simulator(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    def interview_simulator(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Simulador de entrevistas e provas"""
         query = update.callback_query
-        await query.answer()
+        query.answer()
         
-        simulator_text = (
-            "💼 **SIMULADOR DE ENTREVISTAS E PROVAS**\n\n"
-            "Escolha o tipo de simulação:\n\n"
-            "• 🏛️ **Entrevista Advocacia Privada**\n"
-            "• ⚖️ **Entrevista Setor Público**\n" 
-            "• 👨‍⚖️ **Simulado para Magistratura**\n"
-            "• 🔍 **Simulado para MP**\n"
-            "• 🕵️‍♂️ **Simulado para Polícia**\n"
-            "• 💼 **Case Empresarial**\n"
-        )
+        simulator_text = "💼 **SIMULADOR DE ENTREVISTAS E PROVAS**\n\nEscolha o tipo de simulação:\n\n• 🏛️ **Entrevista Advocacia Privada**\n• ⚖️ **Entrevista Setor Público**\n• 👨‍⚖️ **Simulado para Magistratura**\n• 🔍 **Simulado para MP**\n• 🕵️‍♂️ **Simulado para Polícia**\n• 💼 **Case Empresarial**\n"
         
-        keyboard = [
-            [InlineKeyboardButton("🏛️ Advocacia Privada", callback_data="sim_private")],
-            [InlineKeyboardButton("⚖️ Setor Público", callback_data="sim_public")],
-            [InlineKeyboardButton("👨‍⚖️ Magistratura", callback_data="sim_judge")],
-            [InlineKeyboardButton("🔍 Ministério Público", callback_data="sim_mp")],
-            [InlineKeyboardButton("🕵️‍♂️ Polícia", callback_data="sim_police")],
-            [InlineKeyboardButton("💼 Case Empresarial", callback_data="sim_business")],
-            [InlineKeyboardButton("🔙 Voltar", callback_data="coach_back")]
-        ]
+        keyboard = [[InlineKeyboardButton("🏛️ Advocacia Privada", callback_data="sim_private")], [InlineKeyboardButton("⚖️ Setor Público", callback_data="sim_public")], [InlineKeyboardButton("👨‍⚖️ Magistratura", callback_data="sim_judge")], [InlineKeyboardButton("🔍 Ministério Público", callback_data="sim_mp")], [InlineKeyboardButton("🕵️‍♂️ Polícia", callback_data="sim_police")], [InlineKeyboardButton("💼 Case Empresarial", callback_data="sim_business")], [InlineKeyboardButton("🔙 Voltar", callback_data="coach_back")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
-        await query.edit_message_text(simulator_text, reply_markup=reply_markup, parse_mode='Markdown')
+        query.edit_message_text(simulator_text, reply_markup=reply_markup, parse_mode='Markdown')
         return CHOOSING
 
-    async def start_interview_simulation(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    def start_interview_simulation(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Iniciar simulação específica"""
         query = update.callback_query
-        await query.answer()
+        query.answer()
         
         simulation_type = query.data.replace('sim_', '')
         user_id = query.from_user.id
         
-        simulation_types = {
-            'private': 'advocacia privada',
-            'public': 'setor público', 
-            'judge': 'magistratura',
-            'mp': 'ministério público',
-            'police': 'carreira policial',
-            'business': 'direito empresarial'
-        }
-        
+        simulation_types = {'private': 'advocacia privada', 'public': 'setor público', 'judge': 'magistratura', 'mp': 'ministério público', 'police': 'carreira policial', 'business': 'direito empresarial'}
         sim_type = simulation_types.get(simulation_type, 'entrevista')
         
-        # Gerar perguntas com IA
-        await query.edit_message_text(f"🎭 **Preparando simulação para {sim_type}...**")
+        query.edit_message_text(f"🎭 **Preparando simulação para {sim_type}...**")
         
         simulation_prompt = f"""
-        CRIE UMA SIMULAÇÃO DE ENTREVISTA/PROVA PARA:
-
-        CARREIRA: {sim_type.upper()}
-
+        CRIE UMA SIMULAÇÃO DE ENTREVISTA/PROVA PARA: CARREIRA: {sim_type.upper()}
         FORNEÇA:
-
-        1. **3 PERGUNTAS TÉCNICAS** específicas da área
-        2. **2 PERGUNTAS COMPORTAMENTAIS** típicas
-        3. **1 CASE PRÁTICO** para resolução
-        4. **RESPOSTAS IDEIAS** para cada item
-        5. **DICOS DE APRESENTAÇÃO** específicos
-
+        1. 3 PERGUNTAS TÉCNICAS específicas da área
+        2. 2 PERGUNTAS COMPORTAMENTAIS típicas
+        3. 1 CASE PRÁTICO para resolução
+        4. RESPOSTAS IDEIAS para cada item
+        5. DICAS DE APRESENTAÇÃO específicos
         Formate como um simulado interativo e realista!
         """
 
-        simulation = await ai_service.get_legal_advice(simulation_prompt, "Você é um especialista em recrutamento jurídico.")
+        simulation = asyncio.run(ai_service.get_legal_advice(simulation_prompt, "Você é um especialista em recrutamento jurídico."))
         
-        # Salvar simulação
         coach_collection = mongo_db.get_collection('juristcoach')
-        coach_collection.update_one(
-            {'user_id': user_id},
-            {'$push': {
-                'simulations': {
-                    'type': sim_type,
-                    'content': simulation,
-                    'date': datetime.utcnow()
-                }
-            }}
-        )
+        coach_collection.update_one({'user_id': user_id}, {'$push': {'simulations': {'type': sim_type, 'content': simulation, 'date': datetime.utcnow()}}})
         
-        response_text = (
-            f"💼 **SIMULAÇÃO - {sim_type.upper()}**\n\n"
-            f"{simulation}\n\n"
-            "🎯 *Treine suas respostas e melhore seu desempenho!*"
-        )
+        response_text = f"💼 **SIMULAÇÃO - {sim_type.upper()}**\n\n{simulation}\n\n🎯 *Treine suas respostas e melhore seu desempenho!*"
         
         if len(response_text) > 4096:
             parts = [response_text[i:i+4096] for i in range(0, len(response_text), 4096)]
             for part in parts:
-                await query.message.reply_text(part, parse_mode='Markdown')
+                query.message.reply_text(part, parse_mode='Markdown')
         else:
-            await query.message.reply_text(response_text, parse_mode='Markdown')
+            query.message.reply_text(response_text, parse_mode='Markdown')
         
-        keyboard = [
-            [InlineKeyboardButton("🔄 Nova Simulação", callback_data="coach_interview")],
-            [InlineKeyboardButton("📈 Meu Progresso", callback_data="coach_progress")],
-            [InlineKeyboardButton("🔙 Menu Principal", callback_data="coach_back_main")]
-        ]
+        keyboard = [[InlineKeyboardButton("🔄 Nova Simulação", callback_data="coach_interview")], [InlineKeyboardButton("📈 Meu Progresso", callback_data="coach_progress")], [InlineKeyboardButton("🔙 Menu Principal", callback_data="coach_back_main")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
-        await query.message.reply_text("🎭 **Como foi sua performance?**", reply_markup=reply_markup)
+        query.message.reply_text("🎭 **Como foi sua performance?**", reply_markup=reply_markup)
         return RECEIVING_ADVICE
 
-    async def career_trends(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    def career_trends(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Tendências do mercado jurídico"""
         query = update.callback_query
-        await query.answer()
+        query.answer()
         
-        await query.edit_message_text("🔮 **Analisando tendências do mercado jurídico...**")
+        query.edit_message_text("🔮 **Analisando tendências do mercado jurídico...**")
         
         trends_prompt = """
-        ANALISE AS PRINCIPAIS TENDÊNCIAS DO MERCADO JURÍDICO BRASILEIRO PARA OS PRÓXIMOS 2 ANOS:
-
-        INCLUA:
-
-        1. **ÁREAS EM ALTA**
-           - Setores com maior crescimento
-           - Novas especializações
-           - Nichos promissores
-
-        2. **HABILIDADES MAIS VALORIZADAS**
-           - Competências técnicas
-           - Habilidades comportamentais  
-           - Conhecimentos tecnológicos
-
-        3. **IMPACTOS DA TECNOLOGIA**
-           - Lawtechs em ascensão
-           - IA no Direito
-           - Novas ferramentas jurídicas
-
-        4. **MUDANÇAS NO RECRUTAMENTO**
-           - Novos processos seletivos
-           - Competências exigidas
-           - Perfis mais procurados
-
-        5. **RECOMENDAÇÕES ESTRATÉGICAS**
-           - Como se preparar
-           - O que estudar
-           - Quais certificações buscar
-
+        ANALISE AS PRINCIPAIS TENDÊNCIAS DO MERCADO JURÍDICO BRASILEIRO PARA OS PRÓXIMOS 2 ANOS, INCLUINDO:
+        1. ÁREAS EM ALTA (setores, nichos)
+        2. HABILIDADES MAIS VALORIZADAS (técnicas, comportamentais, tech)
+        3. IMPACTOS DA TECNOLOGIA (Lawtechs, IA)
+        4. MUDANÇAS NO RECRUTAMENTO (processos, perfis)
+        5. RECOMENDAÇÕES ESTRATÉGICAS (como se preparar)
         Baseie-se em dados reais e projeções de mercado!
         """
 
-        trends = await ai_service.get_legal_advice(trends_prompt, "Você é um analista de mercado jurídico especializado.")
+        trends = asyncio.run(ai_service.get_legal_advice(trends_prompt, "Você é um analista de mercado jurídico especializado."))
         
-        response_text = (
-            "🔮 **TENDÊNCIAS DO MERCADO JURÍDICO**\n\n"
-            f"{trends}\n\n"
-            "💫 *Prepare-se para o futuro do Direito!*"
-        )
+        response_text = f"🔮 **TENDÊNCIAS DO MERCADO JURÍDICO**\n\n{trends}\n\n💫 *Prepare-se para o futuro do Direito!*"
         
         if len(response_text) > 4096:
             parts = [response_text[i:i+4096] for i in range(0, len(response_text), 4096)]
             for part in parts:
-                await query.message.reply_text(part, parse_mode='Markdown')
+                query.message.reply_text(part, parse_mode='Markdown')
         else:
-            await query.message.reply_text(response_text, parse_mode='Markdown')
+            query.message.reply_text(response_text, parse_mode='Markdown')
         
-        keyboard = [
-            [InlineKeyboardButton("🎯 Análise de Perfil", callback_data="coach_analysis")],
-            [InlineKeyboardButton("🚀 Planejamento", callback_data="coach_planning")],
-            [InlineKeyboardButton("🔙 Menu Principal", callback_data="coach_back_main")]
-        ]
+        keyboard = [[InlineKeyboardButton("🎯 Análise de Perfil", callback_data="coach_analysis")], [InlineKeyboardButton("🚀 Planejamento", callback_data="coach_planning")], [InlineKeyboardButton("🔙 Menu Principal", callback_data="coach_back_main")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
-        await query.message.reply_text("🎯 **Como você vai se preparar?**", reply_markup=reply_markup)
+        query.message.reply_text("🎯 **Como você vai se preparar?**", reply_markup=reply_markup)
         return RECEIVING_ADVICE
 
-    async def progress_tracker(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    def progress_tracker(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Acompanhamento de progresso"""
         query = update.callback_query
-        await query.answer()
+        query.answer()
         
         user_id = query.from_user.id
-        
-        # Buscar dados do usuário
         coach_collection = mongo_db.get_collection('juristcoach')
         user_data = coach_collection.find_one({'user_id': user_id})
         
         if not user_data:
-            progress_text = (
-                "📈 **ACOMPANHAMENTO DE PROGRESSO**\n\n"
-                "Você ainda não começou sua jornada no JuristCoach!\n\n"
-                "🎯 Use a *Análise de Perfil* para dar o primeiro passo."
-            )
+            progress_text = "📈 **ACOMPANHAMENTO DE PROGRESSO**\n\nVocê ainda não começou sua jornada no JuristCoach!\n\n🎯 Use a *Análise de Perfil* para dar o primeiro passo."
         else:
-            # Calcular métricas de progresso
             analysis_date = user_data.get('analysis_date')
             days_since_analysis = (datetime.utcnow() - analysis_date).days if analysis_date else 0
-            
             simulations_count = len(user_data.get('simulations', []))
             has_study_plan = 'study_plan' in user_data
-            
-            progress_text = (
-                "📈 **SEU PROGRESSO NO JURISTCOACH**\n\n"
-                f"📅 **Tempo na jornada:** {days_since_analysis} dias\n"
-                f"🎭 **Simulações realizadas:** {simulations_count}\n"
-                f"📚 **Plano de estudos:** {'✅ Ativo' if has_study_plan else '⏳ Pendente'}\n"
-                f"🔮 **Análise de perfil:** ✅ Concluída\n\n"
-            )
-            
-            # Adicionar insights com base no progresso
-            if days_since_analysis > 30:
-                progress_text += "🌟 **Excelente consistência!** Continue evoluindo.\n"
-            elif days_since_analysis > 7:
-                progress_text += "💫 **Bom começo!** Mantenha o ritmo.\n"
-            else:
-                progress_text += "🎯 **Início promissor!** Foco nos próximos passos.\n"
-            
-            # Recomendações personalizadas
-            if simulations_count == 0:
-                progress_text += "\n💡 **Dica:** Experimente o simulador de entrevistas!\n"
-            elif not has_study_plan:
-                progress_text += "\n💡 **Dica:** Crie seu roteiro de estudos personalizado!\n"
+            progress_text = f"📈 **SEU PROGRESSO NO JURISTCOACH**\n\n📅 **Tempo na jornada:** {days_since_analysis} dias\n🎭 **Simulações realizadas:** {simulations_count}\n📚 **Plano de estudos:** {'✅ Ativo' if has_study_plan else '⏳ Pendente'}\n🔮 **Análise de perfil:** ✅ Concluída\n\n"
+            if days_since_analysis > 30: progress_text += "🌟 **Excelente consistência!** Continue evoluindo.\n"
+            elif days_since_analysis > 7: progress_text += "💫 **Bom começo!** Mantenha o ritmo.\n"
+            else: progress_text += "🎯 **Início promissor!** Foco nos próximos passos.\n"
+            if simulations_count == 0: progress_text += "\n💡 **Dica:** Experimente o simulador de entrevistas!\n"
+            elif not has_study_plan: progress_text += "\n💡 **Dica:** Crie seu roteiro de estudos personalizado!\n"
         
-        keyboard = [
-            [InlineKeyboardButton("🔄 Atualizar Progresso", callback_data="coach_progress")],
-            [InlineKeyboardButton("🎯 Nova Análise", callback_data="coach_analysis")],
-            [InlineKeyboardButton("🔙 Menu Principal", callback_data="coach_back_main")]
-        ]
+        keyboard = [[InlineKeyboardButton("🔄 Atualizar Progresso", callback_data="coach_progress")], [InlineKeyboardButton("🎯 Nova Análise", callback_data="coach_analysis")], [InlineKeyboardButton("🔙 Menu Principal", callback_data="coach_back_main")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
-        await query.edit_message_text(progress_text, reply_markup=reply_markup, parse_mode='Markdown')
+        query.edit_message_text(progress_text, reply_markup=reply_markup, parse_mode='Markdown')
         return CHOOSING
 
-    async def career_planning(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    def career_planning(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Planejamento estratégico de carreira"""
         query = update.callback_query
-        await query.answer()
+        query.answer()
         
-        planning_text = (
-            "🚀 **PLANEJAMENTO ESTRATÉGICO DE CARREIRA**\n\n"
-            "Vou criar um *plano personalizado* para sua trajetória!\n\n"
-            "Escolha o horizonte temporal:\n\n"
-            "• 🎯 **Curto Prazo** (6-12 meses)\n"
-            "• 🚀 **Médio Prazo** (1-3 anos)\n" 
-            "• 🌟 **Longo Prazo** (3-5 anos)\n"
-        )
+        planning_text = "🚀 **PLANEJAMENTO ESTRATÉGICO DE CARREIRA**\n\nVou criar um *plano personalizado* para sua trajetória!\n\nEscolha o horizonte temporal:\n\n• 🎯 **Curto Prazo** (6-12 meses)\n• 🚀 **Médio Prazo** (1-3 anos)\n• 🌟 **Longo Prazo** (3-5 anos)\n"
         
-        keyboard = [
-            [InlineKeyboardButton("🎯 Curto Prazo (6-12 meses)", callback_data="plan_short")],
-            [InlineKeyboardButton("🚀 Médio Prazo (1-3 anos)", callback_data="plan_medium")],
-            [InlineKeyboardButton("🌟 Longo Prazo (3-5 anos)", callback_data="plan_long")],
-            [InlineKeyboardButton("🔙 Voltar", callback_data="coach_back")]
-        ]
+        keyboard = [[InlineKeyboardButton("🎯 Curto Prazo (6-12 meses)", callback_data="plan_short")], [InlineKeyboardButton("🚀 Médio Prazo (1-3 anos)", callback_data="plan_medium")], [InlineKeyboardButton("🌟 Longo Prazo (3-5 anos)", callback_data="plan_long")], [InlineKeyboardButton("🔙 Voltar", callback_data="coach_back")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
-        await query.edit_message_text(planning_text, reply_markup=reply_markup, parse_mode='Markdown')
+        query.edit_message_text(planning_text, reply_markup=reply_markup, parse_mode='Markdown')
         return CHOOSING
 
-    async def generate_career_plan(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    def generate_career_plan(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Gerar plano de carreira com IA"""
         query = update.callback_query
-        await query.answer()
+        query.answer()
         
         plan_type = query.data.replace('plan_', '')
         user_id = query.from_user.id
-        
-        periods = {
-            'short': '6 a 12 meses',
-            'medium': '1 a 3 anos', 
-            'long': '3 a 5 anos'
-        }
-        
+        periods = {'short': '6 a 12 meses', 'medium': '1 a 3 anos', 'long': '3 a 5 anos'}
         period = periods.get(plan_type, 'curto prazo')
         
-        await query.edit_message_text(f"🚀 **Criando seu plano para {period}...**")
+        query.edit_message_text(f"🚀 **Criando seu plano para {period}...**")
         
-        # Buscar dados do usuário para personalização
         coach_collection = mongo_db.get_collection('juristcoach')
         user_data = coach_collection.find_one({'user_id': user_id})
-        
         user_context = user_data.get('ia_analysis', '') if user_data else "Perfil jurídico em desenvolvimento"
         
         plan_prompt = f"""
-        CRIE UM PLANO ESTRATÉGICO DE CARREIRA JURÍDICA:
-
-        CONTEXTO DO USUÁRIO:
-        {user_context}
-
+        CRIE UM PLANO ESTRATÉGICO DE CARREIRA JURÍDICA PARA:
+        CONTEXTO DO USUÁRIO: {user_context}
         PERÍODO: {period.upper()}
-
         ESTRUTURE O PLANO COM:
-
-        1. **OBJETIVOS PRINCIPAIS**
-           - Metas específicas e mensuráveis
-           - Marcos de progresso
-           - Indicadores de sucesso
-
-        2. **ROTEIRO DE AÇÕES**
-           - Passos concretos mês a mês
-           - Cursos e certificações
-           - Experiências práticas necessárias
-
-        3. **RECURSOS NECESSÁRIOS**
-           - Materiais de estudo
-           - Ferramentas e tecnologias
-           - Networking estratégico
-
-        4. **POTENCIAIS OBSTÁCULOS**
-           - Desafios previstos
-           - Estratégias de superação
-           - Planos alternativos
-
-        5. **ACOMPANHAMENTO**
-           - Métricas de acompanhamento
-           - Revisões periódicas
-           - Ajustes necessários
-
+        1. OBJETIVOS PRINCIPAIS (metas, marcos)
+        2. ROTEIRO DE AÇÕES (passos, cursos)
+        3. RECURSOS NECESSÁRIOS (materiais, networking)
+        4. POTENCIAIS OBSTÁCULOS (desafios, estratégias)
+        5. ACOMPANHAMENTO (métricas, revisões)
         Torne o plano prático, realista e motivador!
         """
 
-        career_plan = await ai_service.get_legal_advice(plan_prompt, "Você é um estrategista de carreira jurídica especializado.")
+        career_plan = asyncio.run(ai_service.get_legal_advice(plan_prompt, "Você é um estrategista de carreira jurídica especializado."))
         
-        # Salvar plano
-        coach_collection.update_one(
-            {'user_id': user_id},
-            {'$set': {
-                f'career_plan_{plan_type}': career_plan,
-                f'plan_{plan_type}_date': datetime.utcnow()
-            }}
-        )
+        coach_collection.update_one({'user_id': user_id}, {'$set': {f'career_plan_{plan_type}': career_plan, f'plan_{plan_type}_date': datetime.utcnow()}})
         
-        response_text = (
-            f"🚀 **SEU PLANO DE CARREIRA - {period.upper()}**\n\n"
-            f"{career_plan}\n\n"
-            "💫 *Execute este plano e transforme sua carreira!*"
-        )
+        response_text = f"🚀 **SEU PLANO DE CARREIRA - {period.upper()}**\n\n{career_plan}\n\n💫 *Execute este plano e transforme sua carreira!*"
         
         if len(response_text) > 4096:
             parts = [response_text[i:i+4096] for i in range(0, len(response_text), 4096)]
             for part in parts:
-                await query.message.reply_text(part, parse_mode='Markdown')
+                query.message.reply_text(part, parse_mode='Markdown')
         else:
-            await query.message.reply_text(response_text, parse_mode='Markdown')
+            query.message.reply_text(response_text, parse_mode='Markdown')
         
-        keyboard = [
-            [InlineKeyboardButton("📚 Roteiro de Estudos", callback_data="coach_studyplan")],
-            [InlineKeyboardButton("💼 Simulador", callback_data="coach_interview")],
-            [InlineKeyboardButton("🔙 Menu Principal", callback_data="coach_back_main")]
-        ]
+        keyboard = [[InlineKeyboardButton("📚 Roteiro de Estudos", callback_data="coach_studyplan")], [InlineKeyboardButton("💼 Simulador", callback_data="coach_interview")], [InlineKeyboardButton("🔙 Menu Principal", callback_data="coach_back_main")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
-        await query.message.reply_text("🎯 **Pronto para colocar em prática?**", reply_markup=reply_markup)
+        query.message.reply_text("🎯 **Pronto para colocar em prática?**", reply_markup=reply_markup)
         return RECEIVING_ADVICE
 
-    # CORREÇÃO 3: Removido 'await' da chamada para 'start_juristcoach'
-    async def back_to_main(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    def back_to_main(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Voltar ao menu principal"""
         query = update.callback_query
-        # O 'await' na linha abaixo não é necessário pois a função chamada não é mais 'async'
-        # e a query já foi respondida em 'back_to_menu' que é o passo anterior
-        if query:
-            await query.answer()
+        query.answer()
+        return self.start_juristcoach(update, context)
 
-        # A função start_juristcoach não é mais async, então chamamos diretamente
-        # e como a função de update do telegram não está sendo chamada aqui, usamos o objeto update que já temos
-        if update.callback_query:
-             update.callback_query.message.reply_text("Retornando ao menu principal...")
-             return self.start_juristcoach(update.callback_query, context)
-        else:
-             return self.start_juristcoach(update, context)
-
-    async def back_to_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    def back_to_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Voltar ao menu do JuristCoach"""
         query = update.callback_query
-        await query.answer()
+        query.answer()
         
         welcome_text = (
             "🎯 **JURISTCOACH - MENU PRINCIPAL**\n\n"
@@ -666,10 +396,9 @@ class JuristCoach:
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
-        await query.edit_message_text(welcome_text, reply_markup=reply_markup, parse_mode='Markdown')
+        query.edit_message_text(welcome_text, reply_markup=reply_markup, parse_mode='Markdown')
         return CHOOSING
 
-    # CORREÇÃO 4: Removido 'async' e 'await' desta função
     def cancel(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Cancelar conversação"""
         update.message.reply_text(
@@ -683,6 +412,7 @@ class JuristCoach:
 jurist_coach = JuristCoach()
 
 # Configurar Conversation Handler
+# Note que a entry_point do CallbackQueryHandler foi ajustada para chamar a função diretamente
 coach_conversation = ConversationHandler(
     entry_points=[
         CommandHandler('juristcoach', jurist_coach.start_juristcoach),
